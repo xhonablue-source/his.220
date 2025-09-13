@@ -682,4 +682,48 @@ def display_course_dashboard():
                 st.markdown("""
                 <div style="background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; padding: 1.5rem; border-radius: 15px; text-align: center;">
                     <h3>⚠️</h3>
-                    <p>AI
+                    <p>AI Setup Needed</p>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; padding: 1.5rem; border-radius: 15px; text-align: center;">
+                <h3>❌</h3>
+                <p>AI Setup Needed</p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Course description and objectives
+    st.markdown("## Course Focus")
+    st.info("""
+    This course covers the historical development of Michigan from the period of French exploration 
+    to the present. We examine the major political, social and economic developments of the state, 
+    with special emphasis on southeastern Michigan and the metropolitan Detroit area.
+    
+    **Key Learning Objective:** Recognize Michigan's unique geographical setting and understand 
+    how geography influenced the state's development.
+    """)
+    
+    # Grading scale visualization
+    st.markdown("## Grading Scale")
+    
+    # Create normal distribution grading scale chart
+    grades = ['A (90-100%)', 'B (80-89.9%)', 'C (70-79.9%)', 'D (60-69.9%)', 'E (<60%)']
+    colors = ['#28a745', '#17a2b8', '#ffc107', '#fd7e14', '#dc3545']
+    
+    # Normal distribution: most students get C, fewer get B/D, fewest get A/E
+    student_distribution = [15, 25, 35, 20, 5]  # Percentages that typically earn each grade
+    
+    fig = go.Figure(data=[
+        go.Bar(x=grades, y=student_distribution, marker_color=colors)
+    ])
+    fig.update_layout(
+        title="Expected Grade Distribution (Normal Curve)",
+        xaxis_title="Grade Levels", 
+        yaxis_title="Percentage of Students",
+        showlegend=False,
+        height=400
+    )
+    st.plotly_chart(fig, use_container_width=True)
