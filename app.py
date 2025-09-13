@@ -1,7 +1,7 @@
 """
-Michigan History HIS 220 + AI Solutions Specialist - Complete Interactive App
+Michigan History HIS 220 + Michigan State AI - Complete Functional Application
 Wayne County Community College District
-WITH REAL CLAUDE API INTEGRATION for Michigan Residents
+WITH WORKING CLAUDE API INTEGRATION + INTERACTIVE SLIDES
 """
 
 import streamlit as st
@@ -14,6 +14,7 @@ import requests
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import random
+import base64
 
 # 🔐 SECURE API KEY HANDLING
 try:
@@ -26,7 +27,7 @@ if not ANTHROPIC_API_KEY:
 
 # Configure page
 st.set_page_config(
-    page_title="HIS 220 - Michigan History + AI Specialist",
+    page_title="HIS 220 - Michigan History + Michigan State AI",
     page_icon="🏛️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -45,18 +46,20 @@ if 'quiz_attempts' not in st.session_state:
     st.session_state.quiz_attempts = {}
 if 'assignment_progress' not in st.session_state:
     st.session_state.assignment_progress = {
-        'questions_asked': {'Historical_Expert': [], 'Geography_Specialist': [], 'Detroit_Historian': []},
-        'responses_received': {'Historical_Expert': [], 'Geography_Specialist': [], 'Detroit_Historian': []},
-        'notes': {'Historical_Expert': '', 'Geography_Specialist': '', 'Detroit_Historian': ''},
-        'essays': {'Historical_Expert': '', 'Geography_Specialist': '', 'Detroit_Historian': ''},
-        'completed_specialists': set()
+        'questions_asked': {'Historical_Expert': [], 'Geography_Expert': [], 'Detroit_Historian': []},
+        'responses_received': {'Historical_Expert': [], 'Geography_Expert': [], 'Detroit_Historian': []},
+        'notes': {'Historical_Expert': '', 'Geography_Expert': '', 'Detroit_Historian': ''},
+        'essays': {'Historical_Expert': '', 'Geography_Expert': '', 'Detroit_Historian': ''},
+        'completed_experts': set()
     }
 if 'resident_verified' not in st.session_state:
     st.session_state.resident_verified = False
 if 'ai_conversations' not in st.session_state:
     st.session_state.ai_conversations = []
+if 'api_test_result' not in st.session_state:
+    st.session_state.api_test_result = None
 
-# Course slides data
+# Enhanced course slides data with interactive elements
 SLIDES = [
     {
         "id": "welcome",
@@ -75,7 +78,9 @@ SLIDES = [
         * Special emphasis on southeastern Michigan and Detroit metro
         * Michigan's unique geographical influence on development
         """,
-        "presenter_notes": "Welcome students and introduce the comprehensive nature of this course."
+        "presenter_notes": "Welcome students and introduce the comprehensive nature of this course.",
+        "background_color": "#f0f8ff",
+        "animation": "fade_in"
     },
     {
         "id": "geography_influence",
@@ -101,7 +106,12 @@ SLIDES = [
         """,
         "presenter_notes": "Emphasize how geography directly influenced every aspect of Michigan's development.",
         "interactive": True,
-        "discussion_prompt": "How do you think Michigan's development would have been different if it weren't surrounded by the Great Lakes?"
+        "discussion_prompt": "How do you think Michigan's development would have been different if it weren't surrounded by the Great Lakes?",
+        "background_color": "#e6f3ff",
+        "map_data": {
+            "great_lakes": ["Superior", "Michigan", "Huron", "Erie"],
+            "resources": ["Timber", "Iron ore", "Coal", "Fertile soil"]
+        }
     },
     {
         "id": "french_exploration",
@@ -126,7 +136,14 @@ SLIDES = [
         * **Ottawa** and **Potawatomi** - Part of Three Fires Confederacy
         * **Trade partnerships** - Europeans dependent on Native knowledge
         """,
-        "presenter_notes": "Emphasize the cooperative nature of early French-Native relations."
+        "presenter_notes": "Emphasize the cooperative nature of early French-Native relations.",
+        "background_color": "#fff8e7",
+        "timeline": {
+            "1610s": "Étienne Brûlé arrives",
+            "1634": "Jean Nicolet explores",
+            "1668": "Jacques Marquette founds Sault Ste. Marie",
+            "1701": "Detroit founded"
+        }
     },
     {
         "id": "detroit_founding",
@@ -152,7 +169,9 @@ SLIDES = [
         """,
         "presenter_notes": "Connect Detroit's founding to its continued importance as a transportation hub.",
         "timer_minutes": 15,
-        "activity_type": "discussion"
+        "activity_type": "discussion",
+        "background_color": "#f0fff0",
+        "interactive_map": True
     },
     {
         "id": "assessment",
@@ -177,18 +196,19 @@ SLIDES = [
         
         ## Success Strategies
         * **Regular attendance** and participation
-        * **Engage with AI specialist** for additional help
+        * **Engage with Michigan State AI** for additional help
         * **Connect historical patterns** to modern Michigan
         """,
-        "presenter_notes": "Emphasize the variety of assessment methods available to accommodate different learning styles."
+        "presenter_notes": "Emphasize the variety of assessment methods available to accommodate different learning styles.",
+        "background_color": "#fff0f5"
     }
 ]
 
-# AI Specialist Profiles - Michigan-focused experts
-AI_SPECIALISTS = {
+# Michigan State AI Expert Profiles
+MICHIGAN_AI_EXPERTS = {
     "Historical_Expert": {
         "name": "Dr. Margaret Winters",
-        "title": "Michigan Historical Expert",
+        "title": "Michigan State AI - Historical Expert",
         "expertise": "Michigan history from French exploration through modern times, with special focus on political and social developments",
         "background": "I am a digital historian specializing in Michigan's development. I have deep knowledge of how geographical, political, and social factors shaped our state from Native American settlements through the automotive age to today's innovations.",
         "resident_focus": "I help Michigan residents understand how our state's history connects to current issues, local governance, economic opportunities, and community development.",
@@ -201,9 +221,9 @@ AI_SPECIALISTS = {
         ],
         "personality": "scholarly but accessible, connects historical patterns to current events, passionate about Michigan's unique story"
     },
-    "Geography_Specialist": {
+    "Geography_Expert": {
         "name": "Dr. James Lakeshore",
-        "title": "Michigan Geography & Development Specialist", 
+        "title": "Michigan State AI - Geography & Development Expert", 
         "expertise": "How Michigan's unique geography influenced development, natural resources, transportation, and settlement patterns",
         "background": "I specialize in understanding how Michigan's geography - our Great Lakes location, natural resources, and climate - shaped every aspect of our development and continues to influence life here today.",
         "resident_focus": "I help Michigan residents understand how geography affects everything from job opportunities to recreation, climate challenges, and why certain industries developed where they did.",
@@ -218,7 +238,7 @@ AI_SPECIALISTS = {
     },
     "Detroit_Historian": {
         "name": "Dr. Rosa Martinez", 
-        "title": "Detroit Metro & Southeastern Michigan Historian",
+        "title": "Michigan State AI - Detroit Metro Historian",
         "expertise": "Southeastern Michigan's development, Detroit's rise and transformation, automotive industry, civil rights, urban development",
         "background": "I focus on southeastern Michigan's unique role in American history - from frontier trading post to industrial powerhouse to modern innovation hub. I understand Detroit's complex story and its impact on the region.",
         "resident_focus": "I help southeastern Michigan residents understand their communities' histories, current challenges and opportunities, and how Detroit's story connects to broader Michigan development.",
@@ -233,7 +253,7 @@ AI_SPECIALISTS = {
     }
 }
 
-# Michigan-focused quiz questions
+# Enhanced quiz questions
 QUIZ_DATA = {
     "michigan_basics": {
         "title": "Michigan History Fundamentals", 
@@ -247,7 +267,8 @@ QUIZ_DATA = {
                     "Jean Nicolet"
                 ],
                 "correct": 1,
-                "explanation": "Antoine de la Mothe Cadillac founded Detroit on July 24, 1701, establishing Fort Pontchartrain at the strategic location between Lakes Erie and Huron."
+                "explanation": "Antoine de la Mothe Cadillac founded Detroit on July 24, 1701, establishing Fort Pontchartrain at the strategic location between Lakes Erie and Huron.",
+                "difficulty": "Easy"
             },
             {
                 "question": "Which geographic feature most influenced Michigan's early development?",
@@ -258,7 +279,8 @@ QUIZ_DATA = {
                     "The Mississippi River"
                 ],
                 "correct": 2,
-                "explanation": "Michigan is surrounded by 4 of the 5 Great Lakes, giving it 3,000 miles of freshwater coastline and making water transportation central to its development."
+                "explanation": "Michigan is surrounded by 4 of the 5 Great Lakes, giving it 3,000 miles of freshwater coastline and making water transportation central to its development.",
+                "difficulty": "Medium"
             },
             {
                 "question": "What was the primary economic activity during French rule?",
@@ -269,7 +291,8 @@ QUIZ_DATA = {
                     "Mining"
                 ],
                 "correct": 2,
-                "explanation": "The French economy in Michigan centered on fur trading, establishing trading posts and maintaining partnerships with Native American tribes."
+                "explanation": "The French economy in Michigan centered on fur trading, establishing trading posts and maintaining partnerships with Native American tribes.",
+                "difficulty": "Easy"
             },
             {
                 "question": "Which Native American confederacy was important in early Michigan?",
@@ -280,7 +303,8 @@ QUIZ_DATA = {
                     "Creek Confederacy"
                 ],
                 "correct": 1,
-                "explanation": "The Three Fires Confederacy included the Ojibwe (Chippewa), Ottawa, and Potawatomi tribes, who were the primary Native groups in the Michigan region."
+                "explanation": "The Three Fires Confederacy included the Ojibwe (Chippewa), Ottawa, and Potawatomi tribes, who were the primary Native groups in the Michigan region.",
+                "difficulty": "Medium"
             }
         ]
     },
@@ -296,7 +320,8 @@ QUIZ_DATA = {
                     "It was closest to major Eastern cities"
                 ],
                 "correct": 1,
-                "explanation": "Detroit sits at the narrowest point between Lakes Erie and Huron, making it a crucial control point for Great Lakes navigation and trade."
+                "explanation": "Detroit sits at the narrowest point between Lakes Erie and Huron, making it a crucial control point for Great Lakes navigation and trade.",
+                "difficulty": "Medium"
             },
             {
                 "question": "Which natural resource was NOT a major factor in early Michigan development?",
@@ -307,55 +332,59 @@ QUIZ_DATA = {
                     "Fertile soil"
                 ],
                 "correct": 2,
-                "explanation": "While Michigan had timber, iron ore, and fertile soil that shaped its development, oil deposits were not a significant factor in its early history."
+                "explanation": "While Michigan had timber, iron ore, and fertile soil that shaped its development, oil deposits were not a significant factor in its early history.",
+                "difficulty": "Hard"
             }
         ]
     }
 }
 
-# Michigan resources for residents and students
+# Resources with working links
 MICHIGAN_RESOURCES = {
     "videos": [
         {
             "title": "Michigan's French Colonial Heritage",
-            "url": "https://www.youtube.com/watch?v=michigan-french",
+            "url": "https://www.youtube.com/results?search_query=michigan+french+colonial+history",
             "description": "Explore the lasting influence of French exploration and settlement",
-            "duration": "12 minutes"
+            "duration": "12 minutes",
+            "topic": "French Period"
         },
         {
             "title": "Great Lakes: Michigan's Natural Highways", 
-            "url": "https://www.youtube.com/watch?v=great-lakes-michigan",
+            "url": "https://www.youtube.com/results?search_query=great+lakes+michigan+geography",
             "description": "How the Great Lakes shaped Michigan's transportation and economy",
-            "duration": "15 minutes"
+            "duration": "15 minutes",
+            "topic": "Geography"
         },
         {
             "title": "Detroit: From Trading Post to Motor City",
-            "url": "https://www.youtube.com/watch?v=detroit-history",
+            "url": "https://www.youtube.com/results?search_query=detroit+history+motor+city",
             "description": "The transformation of Detroit from French fort to industrial center",
-            "duration": "18 minutes"
+            "duration": "18 minutes",
+            "topic": "Detroit History"
         }
     ],
     "articles": [
         {
             "title": "Michigan History Center - State Timeline",
-            "url": "https://www.michigan.gov/mhc/timeline",
+            "url": "https://www.michigan.gov/mhc",
             "description": "Comprehensive timeline of Michigan historical events"
         },
         {
             "title": "Detroit Historical Society Resources", 
-            "url": "https://detroithistorical.org/learn",
+            "url": "https://detroithistorical.org",
             "description": "Primary sources and Detroit-focused historical materials"
         },
         {
-            "title": "Michigan Native American History",
-            "url": "https://www.michigan.gov/native-history", 
-            "description": "Understanding the first peoples of Michigan"
+            "title": "Michigan State University - Michigan History",
+            "url": "https://msu.edu",
+            "description": "Academic resources for Michigan history research"
         }
     ],
     "michigan_resident_resources": [
         {
             "title": "Michigan Government Services",
-            "url": "https://www.michigan.gov/som",
+            "url": "https://www.michigan.gov",
             "description": "Access state services, licensing, and information for residents"
         },
         {
@@ -371,23 +400,74 @@ MICHIGAN_RESOURCES = {
     ]
 }
 
-def get_ai_specialist_response(specialist_name: str, question: str, user_location: str = None, anthropic_api_key: str = None) -> str:
-    """Generate response from Michigan AI specialist using Claude API"""
+def test_api_key():
+    """Test if the API key works with a simple request"""
+    if not ANTHROPIC_API_KEY:
+        return False, "No API key provided"
     
-    api_key = ANTHROPIC_API_KEY
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+    }
     
-    if not api_key:
-        return """🚫 **Server Configuration Issue**
+    test_data = {
+        "model": "claude-3-haiku-20240307",
+        "max_tokens": 10,
+        "messages": [{"role": "user", "content": "Hello"}]
+    }
+    
+    try:
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=test_data,
+            timeout=10
+        )
         
-The instructor needs to set up the Anthropic API key for AI specialist responses. 
-Students don't need to worry about this - just let your instructor know!
+        if response.status_code == 200:
+            return True, "API key working"
+        elif response.status_code == 401:
+            return False, "Invalid API key"
+        elif response.status_code == 429:
+            return False, "Rate limited"
+        else:
+            return False, f"HTTP {response.status_code}"
+    except Exception as e:
+        return False, f"Connection error: {str(e)}"
 
-*This message only appears when the server isn't properly configured.*"""
+def get_ai_specialist_response(specialist_name: str, question: str, user_location: str = None) -> str:
+    """Generate response from Michigan State AI using Claude API with enhanced error handling"""
     
-    # Build the system prompt for Michigan specialist
-    specialist = AI_SPECIALISTS[specialist_name]
+    if not ANTHROPIC_API_KEY:
+        return """🔑 **API Key Missing**
+        
+No Anthropic API key found. Please add your API key to Streamlit secrets as `ANTHROPIC_API_KEY` or enter it in the sidebar for testing.
+
+To get an API key:
+1. Go to console.anthropic.com
+2. Create an account
+3. Generate an API key
+4. Add it to your Streamlit secrets"""
     
-    # Add resident-specific context if user is verified Michigan resident
+    # Test API key first time
+    if st.session_state.api_test_result is None:
+        working, message = test_api_key()
+        st.session_state.api_test_result = (working, message)
+    
+    if not st.session_state.api_test_result[0]:
+        return f"""❌ **API Key Issue**
+        
+{st.session_state.api_test_result[1]}
+
+Please check your API key and try again. Make sure:
+- Key starts with 'sk-ant-api03-'
+- Key is active and has credits
+- No extra spaces or characters"""
+    
+    # Build the system prompt
+    specialist = MICHIGAN_AI_EXPERTS[specialist_name]
+    
     resident_context = ""
     if st.session_state.resident_verified:
         resident_context = f"""
@@ -413,9 +493,9 @@ Respond as this specialist, providing educational content that helps the user un
     if user_location:
         user_message += f" (I'm asking from {user_location})"
     
-    # Make API call
+    # Make API call with proper error handling
     headers = {
-        "x-api-key": api_key,
+        "x-api-key": ANTHROPIC_API_KEY,
         "Content-Type": "application/json", 
         "anthropic-version": "2023-06-01"
     }
@@ -441,30 +521,127 @@ Respond as this specialist, providing educational content that helps the user un
             response_data = response.json()
             return response_data["content"][0]["text"]
         elif response.status_code == 401:
-            return "🔑 **API Key Issue** - Please contact your instructor to fix the server configuration."
+            st.session_state.api_test_result = (False, "Invalid API key")
+            return "🔑 **Authentication Failed** - Your API key is invalid or expired."
         elif response.status_code == 429:
-            return "⏰ **Rate Limited** - Too many students are using the system. Please wait a moment and try again."
+            return "⏰ **Rate Limited** - Too many requests. Please wait a moment and try again."
+        elif response.status_code == 400:
+            return "❌ **Bad Request** - There was an issue with the request format."
         else:
-            return f"🚫 **Server Error** - Status {response.status_code}. Please try again or contact your instructor."
+            return f"🚫 **API Error** - HTTP {response.status_code}. Please try again."
             
     except requests.exceptions.Timeout:
-        return "⏰ **Timeout** - The AI specialist is taking too long to respond. Please try again."
-    except requests.exceptions.RequestException:
-        return "🌐 **Connection Error** - Please check your internet connection and try again."
-    except Exception:
-        return "❌ **Unexpected Error** - Something went wrong. Please try again or contact your instructor."
+        return "⏰ **Timeout** - The request took too long. Please try again."
+    except requests.exceptions.ConnectionError:
+        return "🌐 **Connection Error** - Unable to reach the API. Check your internet connection."
+    except requests.exceptions.RequestException as e:
+        return f"🚫 **Request Failed** - {str(e)}"
+    except Exception as e:
+        return f"❌ **Unexpected Error** - {str(e)}"
+
+def create_interactive_slide(slide_data: dict) -> None:
+    """Create an interactive slide with animations and enhanced visuals"""
+    
+    # Custom CSS for this slide
+    bg_color = slide_data.get('background_color', '#ffffff')
+    
+    st.markdown(f"""
+    <style>
+    .slide-container {{
+        background: linear-gradient(135deg, {bg_color} 0%, #ffffff 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        margin: 1rem 0;
+        animation: slideIn 0.8s ease-out;
+    }}
+    
+    @keyframes slideIn {{
+        from {{
+            opacity: 0;
+            transform: translateY(30px);
+        }}
+        to {{
+            opacity: 1;
+            transform: translateY(0);
+        }}
+    }}
+    
+    .timeline-item {{
+        background: rgba(255,255,255,0.8);
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-left: 4px solid #4a90e2;
+        border-radius: 5px;
+    }}
+    
+    .resource-item {{
+        background: rgba(0,123,255,0.1);
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 8px;
+        border: 1px solid rgba(0,123,255,0.2);
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Main slide content in container
+    st.markdown('<div class="slide-container">', unsafe_allow_html=True)
+    
+    # Display main content
+    st.markdown(slide_data["content"])
+    
+    # Add interactive elements based on slide type
+    if slide_data.get("timeline"):
+        st.markdown("### 📅 Historical Timeline")
+        for year, event in slide_data["timeline"].items():
+            st.markdown(f'<div class="timeline-item"><strong>{year}:</strong> {event}</div>', 
+                       unsafe_allow_html=True)
+    
+    if slide_data.get("map_data"):
+        st.markdown("### 🗺️ Interactive Elements")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Great Lakes:**")
+            for lake in slide_data["map_data"]["great_lakes"]:
+                st.markdown(f"• {lake}")
+        
+        with col2:
+            st.markdown("**Natural Resources:**")
+            for resource in slide_data["map_data"]["resources"]:
+                st.markdown(f"• {resource}")
+    
+    # Interactive discussion prompt
+    if slide_data.get("interactive") and slide_data.get("discussion_prompt"):
+        st.markdown("---")
+        st.markdown("### 💭 Think About This:")
+        st.info(slide_data["discussion_prompt"])
+        
+        response_key = f"response_{slide_data['id']}"
+        response = st.text_area(
+            "Share your thoughts:",
+            key=response_key,
+            placeholder="What do you think? Type your response here...",
+            height=100
+        )
+        if response:
+            st.session_state.student_responses[response_key] = response
+            st.success("Response saved!")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def display_course_dashboard():
-    """Main course dashboard with overview"""
+    """Enhanced course dashboard with Michigan State AI status"""
     st.markdown("# 🏛️ Michigan History HIS 220")
     st.markdown("## Wayne County Community College District")
     
-    # Course overview cards
+    # Course overview cards with animations
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.markdown("""
-        <div style="background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; padding: 1rem; border-radius: 10px; text-align: center;">
+        <div style="background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; padding: 1.5rem; border-radius: 15px; text-align: center; animation: pulse 2s infinite;">
             <h3>3.0</h3>
             <p>Credit Hours</p>
         </div>
@@ -472,7 +649,7 @@ def display_course_dashboard():
     
     with col2:
         st.markdown("""
-        <div style="background: linear-gradient(45deg, #667eea, #764ba2); color: white; padding: 1rem; border-radius: 10px; text-align: center;">
+        <div style="background: linear-gradient(45deg, #667eea, #764ba2); color: white; padding: 1.5rem; border-radius: 15px; text-align: center;">
             <h3>45</h3>
             <p>Contact Hours</p>
         </div>
@@ -480,657 +657,29 @@ def display_course_dashboard():
     
     with col3:
         st.markdown("""
-        <div style="background: linear-gradient(45deg, #f093fb, #f5576c); color: white; padding: 1rem; border-radius: 10px; text-align: center;">
+        <div style="background: linear-gradient(45deg, #f093fb, #f5576c); color: white; padding: 1.5rem; border-radius: 15px; text-align: center;">
             <h3>0</h3>
             <p>Prerequisites</p>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
-        # Show AI specialist status
+        # Enhanced Michigan State AI status with real testing
         if ANTHROPIC_API_KEY:
-            st.markdown("""
-            <div style="background: linear-gradient(45deg, #4facfe, #00f2fe); color: white; padding: 1rem; border-radius: 10px; text-align: center;">
-                <h3>✅</h3>
-                <p>AI Specialist Active</p>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div style="background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; padding: 1rem; border-radius: 10px; text-align: center;">
-                <h3>❌</h3>
-                <p>AI Setup Needed</p>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Course description and objectives
-    st.markdown("## Course Focus")
-    st.info("""
-    This course covers the historical development of Michigan from the period of French exploration 
-    to the present. We examine the major political, social and economic developments of the state, 
-    with special emphasis on southeastern Michigan and the metropolitan Detroit area.
-    
-    **Key Learning Objective:** Recognize Michigan's unique geographical setting and understand 
-    how geography influenced the state's development.
-    """)
-    
-    # Grading scale visualization
-    st.markdown("## Grading Scale")
-    
-    # Create grading scale chart
-    grades = ['A (90-100%)', 'B (80-89.9%)', 'C (70-79.9%)', 'D (60-69.9%)', 'E (<60%)']
-    colors = ['#28a745', '#17a2b8', '#ffc107', '#fd7e14', '#dc3545']
-    ranges = [10, 10, 10, 10, 60]
-    
-    fig = go.Figure(data=[
-        go.Bar(x=grades, y=ranges, marker_color=colors)
-    ])
-    fig.update_layout(
-        title="Grading Scale Distribution",
-        xaxis_title="Grade Levels", 
-        yaxis_title="Percentage Range",
-        showlegend=False
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-def display_ai_specialist():
-    """Michigan AI Solutions Specialist for residents"""
-    st.markdown("# 🤖 Michigan AI Solutions Specialist")
-    st.markdown("## Your Go-To Resource as a Michigan Resident")
-    
-    # Resident verification
-    if not st.session_state.resident_verified:
-        st.markdown("### 📍 Resident Verification")
-        st.info("Verify your Michigan residency to access specialized assistance for residents!")
-        
-        with st.form("resident_verification"):
-            col1, col2 = st.columns(2)
-            with col1:
-                city = st.text_input("Michigan City/Town")
-            with col2:
-                zip_code = st.text_input("ZIP Code")
+            if st.session_state.api_test_result is None:
+                with st.spinner("Testing Michigan State AI..."):
+                    working, message = test_api_key()
+                    st.session_state.api_test_result = (working, message)
             
-            verify_button = st.form_submit_button("Verify Michigan Residency")
-            
-            if verify_button and city and zip_code:
-                # Simple verification (in production, this would be more robust)
-                st.session_state.resident_verified = True
-                st.session_state.user_location = f"{city}, Michigan {zip_code}"
-                st.success(f"✅ Verified Michigan resident from {city}!")
-                st.balloons()
-                time.sleep(1)
-                st.rerun()
-    
-    else:
-        st.success(f"✅ Verified Michigan Resident: {st.session_state.user_location}")
-        
-        # Show available specialists
-        st.markdown("## Meet Your Michigan Specialists")
-        
-        specialist_tabs = st.tabs([
-            "🎓 Historical Expert", 
-            "🗺️ Geography Specialist", 
-            "🏙️ Detroit Historian"
-        ])
-        
-        with specialist_tabs[0]:
-            specialist = AI_SPECIALISTS["Historical_Expert"]
-            st.markdown(f"### {specialist['name']}")
-            st.markdown(f"**{specialist['title']}**")
-            st.markdown(f"**Expertise:** {specialist['expertise']}")
-            
-            with st.expander("Areas of Focus"):
-                for area in specialist['key_areas']:
-                    st.markdown(f"- {area}")
-            
-            st.markdown("**How I Help Michigan Residents:**")
-            st.info(specialist['resident_focus'])
-        
-        with specialist_tabs[1]:
-            specialist = AI_SPECIALISTS["Geography_Specialist"]
-            st.markdown(f"### {specialist['name']}")
-            st.markdown(f"**{specialist['title']}**")
-            st.markdown(f"**Expertise:** {specialist['expertise']}")
-            
-            with st.expander("Areas of Focus"):
-                for area in specialist['key_areas']:
-                    st.markdown(f"- {area}")
-            
-            st.markdown("**How I Help Michigan Residents:**")
-            st.info(specialist['resident_focus'])
-        
-        with specialist_tabs[2]:
-            specialist = AI_SPECIALISTS["Detroit_Historian"] 
-            st.markdown(f"### {specialist['name']}")
-            st.markdown(f"**{specialist['title']}**")
-            st.markdown(f"**Expertise:** {specialist['expertise']}")
-            
-            with st.expander("Areas of Focus"):
-                for area in specialist['key_areas']:
-                    st.markdown(f"- {area}")
-            
-            st.markdown("**How I Help Michigan Residents:**") 
-            st.info(specialist['resident_focus'])
-        
-        # AI Conversation Interface
-        st.markdown("---")
-        st.markdown("## 💬 Ask Your AI Specialist")
-        
-        if ANTHROPIC_API_KEY:
-            st.success("✅ AI Specialist System Online - Real-time responses enabled!")
-        else:
-            st.error("❌ AI System Setup Needed - Contact instructor to enable live responses")
-        
-        # Specialist selection
-        specialist_choice = st.selectbox(
-            "Choose a specialist to ask:",
-            ["Historical_Expert", "Geography_Specialist", "Detroit_Historian"],
-            format_func=lambda x: f"{AI_SPECIALISTS[x]['name']} - {AI_SPECIALISTS[x]['title']}"
-        )
-        
-        # Question categories for residents
-        st.markdown("### 🎯 Question Categories for Michigan Residents:")
-        
-        question_categories = {
-            "Historical Context": "How does Michigan's history relate to current issues or opportunities?",
-            "Local Resources": "What historical sites, museums, or resources are available in my area?", 
-            "Economic Development": "How did historical industries shape current job markets and opportunities?",
-            "Cultural Heritage": "What cultural traditions and heritage sites reflect my community's history?",
-            "Civic Engagement": "How can understanding Michigan history help me be a better citizen?",
-            "Educational Opportunities": "What historical education or career paths are available in Michigan?"
-        }
-        
-        selected_category = st.selectbox("Question Category:", list(question_categories.keys()))
-        st.info(f"**Examples:** {question_categories[selected_category]}")
-        
-        # Question input
-        user_question = st.text_area(
-            "Ask your Michigan specialist:",
-            placeholder=f"Example: As a resident of {st.session_state.get('user_location', 'Michigan')}, I'm wondering about...",
-            height=100
-        )
-        
-        # Ask question button
-        if st.button("Ask Specialist", type="primary"):
-            if user_question.strip():
-                with st.spinner(f"💭 {AI_SPECIALISTS[specialist_choice]['name']} is researching your question..."):
-                    response = get_ai_specialist_response(
-                        specialist_choice, 
-                        user_question,
-                        st.session_state.get('user_location')
-                    )
-                
-                # Display response
-                st.markdown(f"### 🎭 {AI_SPECIALISTS[specialist_choice]['name']} responds:")
-                st.markdown(response)
-                
-                # Save conversation
-                conversation_entry = {
-                    'timestamp': datetime.now().isoformat(),
-                    'specialist': specialist_choice,
-                    'question': user_question,
-                    'response': response,
-                    'category': selected_category
-                }
-                st.session_state.ai_conversations.append(conversation_entry)
-                
-                # Feedback buttons
-                col1, col2, col3 = st.columns([1, 1, 2])
-                with col1:
-                    if st.button("👍 Helpful"):
-                        st.success("Thank you for the feedback!")
-                with col2:
-                    if st.button("👎 Not helpful"):
-                        st.info("We'll work on improving our responses!")
-                with col3:
-                    if st.button("💾 Save to My Notes"):
-                        st.success("Response saved to your conversation history!")
+            if st.session_state.api_test_result[0]:
+                st.markdown("""
+                <div style="background: linear-gradient(45deg, #4facfe, #00f2fe); color: white; padding: 1.5rem; border-radius: 15px; text-align: center;">
+                    <h3>✅</h3>
+                    <p>Michigan State AI</p>
+                </div>
+                """, unsafe_allow_html=True)
             else:
-                st.warning("Please enter a question first!")
-        
-        # Conversation history
-        if st.session_state.ai_conversations:
-            st.markdown("---")
-            st.markdown("## 📚 Your Conversation History")
-            
-            with st.expander(f"View Previous Conversations ({len(st.session_state.ai_conversations)} total)"):
-                for i, conv in enumerate(reversed(st.session_state.ai_conversations[-10:])):  # Show last 10
-                    specialist_name = AI_SPECIALISTS[conv['specialist']]['name']
-                    timestamp = datetime.fromisoformat(conv['timestamp']).strftime("%Y-%m-%d %H:%M")
-                    
-                    st.markdown(f"**{timestamp} - {specialist_name}**")
-                    st.markdown(f"*Q: {conv['question'][:100]}...*")
-                    st.markdown(f"A: {conv['response'][:200]}...")
-                    st.markdown("---")
-
-def display_assignments():
-    """Display course assignments with progress tracking"""
-    st.markdown("# 📝 Course Assignments")
-    
-    # Assignment 1: Historical Analysis with AI Specialists
-    st.markdown("## Assignment 1: Michigan Historical Analysis")
-    st.markdown("### Explore Michigan History Through Specialist Consultations")
-    
-    with st.expander("📋 Assignment Instructions", expanded=True):
-        st.markdown("""
-        ### Your Mission:
-        Conduct in-depth consultations with three Michigan AI specialists to understand different aspects of our state's development.
-        
-        **Requirements:**
-        - Consult with **each specialist** (Historical Expert, Geography Specialist, Detroit Historian)
-        - Ask **at least 3 focused questions** to each specialist
-        - Take **detailed notes** on their responses
-        - Write a **200-300 word reflection** for each specialist consultation
-        
-        **Focus Areas:**
-        - **Historical Expert**: Political and social developments, key turning points
-        - **Geography Specialist**: How location and resources shaped development
-        - **Detroit Historian**: Urban development, industry, and cultural changes
-        """)
-    
-    # Progress tracking
-    st.markdown("## 📊 Your Progress")
-    
-    progress_data = st.session_state.assignment_progress
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        questions_asked = len(progress_data['questions_asked']['Historical_Expert'])
-        st.metric("Historical Expert Questions", f"{questions_asked}/3")
-        if questions_asked >= 3:
-            st.success("✅ Complete")
-    
-    with col2:
-        questions_asked = len(progress_data['questions_asked']['Geography_Specialist'])
-        st.metric("Geography Specialist Questions", f"{questions_asked}/3") 
-        if questions_asked >= 3:
-            st.success("✅ Complete")
-    
-    with col3:
-        questions_asked = len(progress_data['questions_asked']['Detroit_Historian'])
-        st.metric("Detroit Historian Questions", f"{questions_asked}/3")
-        if questions_asked >= 3:
-            st.success("✅ Complete")
-    
-    # Specialist consultation interface
-    st.markdown("## 💬 Specialist Consultations")
-    
-    specialist = st.selectbox(
-        "Select specialist for consultation:",
-        ["Historical_Expert", "Geography_Specialist", "Detroit_Historian"],
-        format_func=lambda x: f"{AI_SPECIALISTS[x]['name']} - {AI_SPECIALISTS[x]['title']}"
-    )
-    
-    # Show specialist expertise
-    selected_specialist = AI_SPECIALISTS[specialist]
-    st.markdown(f"### Consulting with {selected_specialist['name']}")
-    st.info(f"**Expertise:** {selected_specialist['expertise']}")
-    
-    # Question input
-    consultation_question = st.text_area(
-        f"Ask {selected_specialist['name']} a focused question about Michigan history:",
-        placeholder="Example: How did the Great Lakes influence early settlement patterns in Michigan?",
-        height=80
-    )
-    
-    if st.button(f"Consult {selected_specialist['name']}", type="primary"):
-        if consultation_question.strip():
-            with st.spinner(f"💭 {selected_specialist['name']} is analyzing your question..."):
-                response = get_ai_specialist_response(specialist, consultation_question)
-            
-            st.markdown(f"### 🎓 {selected_specialist['name']} responds:")
-            st.markdown(response)
-            
-            # Save to assignment progress
-            progress_data['questions_asked'][specialist].append({
-                'question': consultation_question,
-                'timestamp': datetime.now().isoformat()
-            })
-            
-            progress_data['responses_received'][specialist].append({
-                'question': consultation_question,
-                'response': response,
-                'timestamp': datetime.now().isoformat()
-            })
-            
-            st.success("Consultation completed and saved to your assignment progress!")
-        else:
-            st.warning("Please enter a question for consultation.")
-    
-    # Notes section for each specialist
-    st.markdown(f"## 📝 Notes on {selected_specialist['name']}")
-    
-    current_notes = st.text_area(
-        f"Take notes on insights from {selected_specialist['name']}:",
-        value=progress_data['notes'][specialist],
-        height=150,
-        placeholder="What key insights did you gain? How do their responses help you understand Michigan's development?"
-    )
-    
-    if st.button(f"Save Notes for {selected_specialist['name']}"):
-        progress_data['notes'][specialist] = current_notes
-        st.success("Notes saved successfully!")
-    
-    # Reflection essay section
-    questions_completed = len(progress_data['questions_asked'][specialist])
-    if questions_completed >= 3:
-        st.markdown(f"## ✍️ Reflection Essay: {selected_specialist['name']}")
-        st.success(f"You've completed all consultations with {selected_specialist['name']}! Now write your reflection.")
-        
-        current_essay = st.text_area(
-            f"Write a 200-300 word reflection on your consultations with {selected_specialist['name']}:",
-            value=progress_data['essays'][specialist],
-            height=200,
-            placeholder=f"Based on your consultations with {selected_specialist['name']}, what did you learn about Michigan's development? How do their insights help you understand our state's history?"
-        )
-        
-        # Word count tracking
-        word_count = len(current_essay.split()) if current_essay else 0
-        
-        if word_count < 200:
-            st.warning(f"Word count: {word_count}/200 (minimum) - Need {200-word_count} more words")
-        elif word_count > 300:
-            st.warning(f"Word count: {word_count}/300 (maximum) - Remove {word_count-300} words")
-        else:
-            st.success(f"Word count: {word_count} - Perfect length!")
-        
-        if st.button(f"Submit Reflection for {selected_specialist['name']}"):
-            if 200 <= word_count <= 300:
-                progress_data['essays'][specialist] = current_essay
-                progress_data['completed_specialists'].add(specialist)
-                st.balloons()
-                st.success(f"Reflection submitted successfully for {selected_specialist['name']}!")
-            else:
-                st.error("Reflection must be between 200-300 words.")
-    
-    # Overall assignment completion
-    st.markdown("## 🎯 Overall Assignment Progress")
-    
-    total_questions = sum(len(questions) for questions in progress_data['questions_asked'].values())
-    total_reflections = len(progress_data['completed_specialists'])
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Total Consultations", f"{total_questions}/9")
-    with col2:
-        st.metric("Reflections Completed", f"{total_reflections}/3")
-    
-    # Assignment completion check
-    if total_questions >= 9 and total_reflections >= 3:
-        st.balloons()
-        st.success("🎉 **Assignment 1 Complete!** You've successfully completed all specialist consultations and reflections.")
-        
-        # Export assignment results
-        if st.button("📄 Export Assignment Results"):
-            export_data = {
-                'assignment': 'Assignment 1: Michigan Historical Analysis',
-                'student_name': 'Student',  # In production, would get from user profile
-                'completion_date': datetime.now().isoformat(),
-                'consultations': progress_data['responses_received'],
-                'notes': progress_data['notes'],
-                'reflections': progress_data['essays'],
-                'statistics': {
-                    'total_consultations': total_questions,
-                    'total_reflections': total_reflections,
-                    'completed_specialists': list(progress_data['completed_specialists'])
-                }
-            }
-            
-            json_str = json.dumps(export_data, indent=2)
-            st.download_button(
-                "Download Assignment Results",
-                json_str,
-                file_name=f"michigan_history_assignment1_{datetime.now().strftime('%Y%m%d')}.json",
-                mime="application/json"
-            )
-
-def display_slide(slide_data: dict) -> None:
-    """Display course presentation slide"""
-    st.markdown(slide_data["content"])
-    
-    # Interactive elements
-    if slide_data.get("interactive"):
-        if "discussion_prompt" in slide_data:
-            st.markdown("---")
-            st.markdown("### 💭 Discussion Question:")
-            st.info(slide_data["discussion_prompt"])
-            
-            response_key = f"response_{slide_data['id']}"
-            response = st.text_area(
-                "Share your thoughts:",
-                key=response_key,
-                placeholder="What do you think? Share your perspective..."
-            )
-            if response:
-                st.session_state.student_responses[response_key] = response
-                st.success("Response saved!")
-
-def display_quiz(quiz_id: str) -> None:
-    """Display interactive quiz with detailed feedback"""
-    if quiz_id not in QUIZ_DATA:
-        st.error("Quiz not found!")
-        return
-    
-    quiz = QUIZ_DATA[quiz_id]
-    st.markdown(f"## 📝 {quiz['title']}")
-    
-    if quiz_id not in st.session_state.quiz_attempts:
-        st.session_state.quiz_attempts[quiz_id] = 0
-    
-    with st.form(f"quiz_{quiz_id}"):
-        answers = {}
-        for i, q in enumerate(quiz["questions"]):
-            st.markdown(f"**Question {i+1}:** {q['question']}")
-            answer = st.radio(
-                "Choose your answer:",
-                options=q["options"],
-                key=f"q_{quiz_id}_{i}",
-                index=None
-            )
-            if answer:
-                answers[i] = q["options"].index(answer)
-        
-        submitted = st.form_submit_button("Submit Quiz")
-        
-        if submitted and len(answers) == len(quiz["questions"]):
-            st.session_state.quiz_attempts[quiz_id] += 1
-            
-            correct_count = 0
-            total_questions = len(quiz["questions"])
-            
-            st.markdown("---")
-            st.markdown("### 📊 Results:")
-            
-            for i, q in enumerate(quiz["questions"]):
-                if i in answers:
-                    is_correct = answers[i] == q["correct"]
-                    if is_correct:
-                        correct_count += 1
-                        st.success(f"✅ Question {i+1}: Correct!")
-                    else:
-                        st.error(f"❌ Question {i+1}: Incorrect")
-                        st.info(f"**Correct answer:** {q['options'][q['correct']]}")
-                    
-                    st.markdown(f"**Explanation:** {q['explanation']}")
-                    st.markdown("---")
-            
-            score_pct = (correct_count / total_questions) * 100
-            
-            if score_pct >= 80:
-                st.balloons()
-                st.success(f"Excellent work! Score: {correct_count}/{total_questions} ({score_pct:.0f}%)")
-            elif score_pct >= 60:
-                st.success(f"Good job! Score: {correct_count}/{total_questions} ({score_pct:.0f}%)")
-            else:
-                st.warning(f"Keep studying! Score: {correct_count}/{total_questions} ({score_pct:.0f}%)")
-
-def display_resources():
-    """Display enhanced resources for students and residents"""
-    st.markdown("# 📚 Learning Resources")
-    st.markdown("Comprehensive resources for Michigan history students and residents")
-    
-    resource_tabs = st.tabs(["🎥 Videos", "📖 Articles", "🏠 For Michigan Residents"])
-    
-    with resource_tabs[0]:
-        st.markdown("## Educational Videos")
-        for video in MICHIGAN_RESOURCES["videos"]:
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.markdown(f"### {video['title']}")
-                st.markdown(video['description'])
-                st.markdown(f"[Watch Video]({video['url']})")
-            with col2:
-                st.info(f"Duration: {video['duration']}")
-            st.markdown("---")
-    
-    with resource_tabs[1]:
-        st.markdown("## Recommended Articles & Sources")
-        for article in MICHIGAN_RESOURCES["articles"]:
-            st.markdown(f"- **[{article['title']}]({article['url']})** - {article['description']}")
-    
-    with resource_tabs[2]:
-        st.markdown("## Resources for Michigan Residents")
-        st.info("These resources help you connect Michigan history to current opportunities and services.")
-        
-        for resource in MICHIGAN_RESOURCES["michigan_resident_resources"]:
-            st.markdown(f"- **[{resource['title']}]({resource['url']})** - {resource['description']}")
-
-def sidebar_navigation() -> str:
-    """Enhanced sidebar navigation with course and resident features"""
-    st.sidebar.markdown("# 🏛️ Michigan History HIS 220")
-    st.sidebar.markdown("**Wayne County Community College District**")
-    
-    # Mode selection
-    mode = st.sidebar.radio(
-        "Choose Your Experience:",
-        [
-            "🏠 Course Dashboard", 
-            "📊 Course Presentation",
-            "🤖 AI Specialist (Residents)",
-            "📝 Assignments", 
-            "🧠 Knowledge Quizzes", 
-            "📚 Resources"
-        ]
-    )
-    
-    if mode == "📊 Course Presentation":
-        st.sidebar.markdown("## Lecture Navigation")
-        
-        slide_titles = [f"{i+1}. {slide['title']}" for i, slide in enumerate(SLIDES)]
-        selected_slide = st.sidebar.selectbox(
-            "Jump to slide:",
-            options=range(len(SLIDES)),
-            format_func=lambda x: slide_titles[x],
-            index=st.session_state.current_slide
-        )
-        
-        if selected_slide != st.session_state.current_slide:
-            st.session_state.current_slide = selected_slide
-        
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            if st.button("⬅️ Previous") and st.session_state.current_slide > 0:
-                st.session_state.current_slide -= 1
-                st.rerun()
-        
-        with col2:
-            if st.button("Next ➡️") and st.session_state.current_slide < len(SLIDES) - 1:
-                st.session_state.current_slide += 1
-                st.rerun()
-    
-    # System status
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("## 🔧 System Status")
-    if ANTHROPIC_API_KEY:
-        st.sidebar.success("✅ AI Specialist Online")
-        st.sidebar.caption("Real-time responses enabled")
-    else:
-        st.sidebar.error("❌ AI Setup Required")
-        st.sidebar.caption("Contact instructor")
-    
-    # Quick stats
-    if st.session_state.resident_verified:
-        st.sidebar.success("✅ Michigan Resident Verified")
-        conversations = len(st.session_state.ai_conversations)
-        if conversations > 0:
-            st.sidebar.caption(f"{conversations} AI conversations")
-    
-    return mode.split()[1].lower()
-
-def main():
-    """Main application with all functionality"""
-    
-    # Custom CSS for enhanced styling
-    st.markdown("""
-    <style>
-    .main > div {
-        padding-top: 1rem;
-    }
-    .stButton > button {
-        width: 100%;
-        border-radius: 8px;
-        border: none;
-        background: linear-gradient(45deg, #1e3c72, #2a5298);
-        color: white;
-        font-weight: bold;
-    }
-    .stButton > button:hover {
-        background: linear-gradient(45deg, #2a5298, #1e3c72);
-        transform: translateY(-1px);
-    }
-    .stSelectbox > div > div {
-        border-radius: 8px;
-    }
-    .stTextArea > div > div > textarea {
-        border-radius: 8px;
-    }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 1rem;
-        border-radius: 10px;
-        text-align: center;
-        margin: 0.5rem 0;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Get current mode from sidebar
-    current_mode = sidebar_navigation()
-    
-    if current_mode == "course":
-        display_course_dashboard()
-    
-    elif current_mode == "course":
-        current_slide = SLIDES[st.session_state.current_slide]
-        display_slide(current_slide)
-        
-        progress = (st.session_state.current_slide + 1) / len(SLIDES)
-        st.progress(progress)
-        st.caption(f"Slide {st.session_state.current_slide + 1} of {len(SLIDES)}")
-    
-    elif current_mode == "ai":
-        display_ai_specialist()
-    
-    elif current_mode == "assignments":
-        display_assignments()
-    
-    elif current_mode == "knowledge":
-        st.markdown("# 🧠 Knowledge Check Quizzes")
-        
-        quiz_choice = st.selectbox(
-            "Select a quiz:",
-            ["michigan_basics", "geography_influence"],
-            format_func=lambda x: QUIZ_DATA[x]["title"]
-        )
-        
-        display_quiz(quiz_choice)
-    
-    elif current_mode == "resources":
-        display_resources()
-
-if __name__ == "__main__":
-    main()
+                st.markdown("""
+                <div style="background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; padding: 1.5rem; border-radius: 15px; text-align: center;">
+                    <h3>⚠️</h3>
+                    <p>AI
