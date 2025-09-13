@@ -14,16 +14,14 @@ import requests
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import random
-import base64
 
 # 🔐 SECURE API KEY HANDLING
-try:
-    ANTHROPIC_API_KEY = st.secrets["ANTHROPIC_API_KEY"]
-except KeyError:
-    ANTHROPIC_API_KEY = None
-
-if not ANTHROPIC_API_KEY:
-    ANTHROPIC_API_KEY = st.sidebar.text_input("🔑 Anthropic API Key (for testing)", type="password")
+def get_api_key():
+    """Get API key from secrets or sidebar input"""
+    try:
+        return st.secrets["ANTHROPIC_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        return st.sidebar.text_input("🔑 Anthropic API Key (for testing)", type="password")
 
 # Configure page
 st.set_page_config(
@@ -34,30 +32,32 @@ st.set_page_config(
 )
 
 # Initialize session state
-if 'current_slide' not in st.session_state:
-    st.session_state.current_slide = 0
-if 'timer_active' not in st.session_state:
-    st.session_state.timer_active = False
-if 'timer_end' not in st.session_state:
-    st.session_state.timer_end = None
-if 'student_responses' not in st.session_state:
-    st.session_state.student_responses = {}
-if 'quiz_attempts' not in st.session_state:
-    st.session_state.quiz_attempts = {}
-if 'assignment_progress' not in st.session_state:
-    st.session_state.assignment_progress = {
-        'questions_asked': {'Historical_Expert': [], 'Geography_Expert': [], 'Detroit_Historian': []},
-        'responses_received': {'Historical_Expert': [], 'Geography_Expert': [], 'Detroit_Historian': []},
-        'notes': {'Historical_Expert': '', 'Geography_Expert': '', 'Detroit_Historian': ''},
-        'essays': {'Historical_Expert': '', 'Geography_Expert': '', 'Detroit_Historian': ''},
-        'completed_experts': set()
+def initialize_session_state():
+    """Initialize all session state variables"""
+    defaults = {
+        'current_slide': 0,
+        'timer_active': False,
+        'timer_end': None,
+        'student_responses': {},
+        'quiz_attempts': {},
+        'assignment_progress': {
+            'questions_asked': {'Historical_Expert': [], 'Geography_Expert': [], 'Detroit_Historian': []},
+            'responses_received': {'Historical_Expert': [], 'Geography_Expert': [], 'Detroit_Historian': []},
+            'notes': {'Historical_Expert': '', 'Geography_Expert': '', 'Detroit_Historian': ''},
+            'essays': {'Historical_Expert': '', 'Geography_Expert': '', 'Detroit_Historian': ''},
+            'completed_experts': set()
+        },
+        'resident_verified': False,
+        'ai_conversations': [],
+        'api_test_result': None,
+        'current_page': 'dashboard'
     }
-if 'resident_verified' not in st.session_state:
-    st.session_state.resident_verified = False
-if 'ai_conversations' not in st.session_state:
-    st.session_state.ai_conversations = []
-if 'api_test_result' not in st.session_state:
-    st.session_state.api_test_result = None
+    
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+initialize_session_state()
 
 # Enhanced course slides data with interactive elements
 SLIDES = [
@@ -402,11 +402,12 @@ MICHIGAN_RESOURCES = {
 
 def test_api_key():
     """Test if the API key works with a simple request"""
-    if not ANTHROPIC_API_KEY:
+    api_key = get_api_key()
+    if not api_key:
         return False, "No API key provided"
     
     headers = {
-        "x-api-key": ANTHROPIC_API_KEY,
+        "x-api-key": api_key,
         "Content-Type": "application/json",
         "anthropic-version": "2023-06-01"
     }
@@ -439,7 +440,8 @@ def test_api_key():
 def get_ai_specialist_response(specialist_name: str, question: str, user_location: str = None) -> str:
     """Generate response from Michigan State AI using Claude API with enhanced error handling"""
     
-    if not ANTHROPIC_API_KEY:
+    api_key = get_api_key()
+    if not api_key:
         return """🔑 **API Key Missing**
         
 No Anthropic API key found. Please add your API key to Streamlit secrets as `ANTHROPIC_API_KEY` or enter it in the sidebar for testing.
@@ -495,7 +497,7 @@ Respond as this specialist, providing educational content that helps the user un
     
     # Make API call with proper error handling
     headers = {
-        "x-api-key": ANTHROPIC_API_KEY,
+        "x-api-key": api_key,
         "Content-Type": "application/json", 
         "anthropic-version": "2023-06-01"
     }
@@ -641,7 +643,7 @@ def display_course_dashboard():
     
     with col1:
         st.markdown("""
-        <div style="background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; padding: 1.5rem; border-radius: 15px; text-align: center; animation: pulse 2s infinite;">
+        <div style="background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; padding: 1.5rem; border-radius: 15px; text-align: center;">
             <h3>3.0</h3>
             <p>Credit Hours</p>
         </div>
@@ -665,7 +667,8 @@ def display_course_dashboard():
     
     with col4:
         # Enhanced Michigan State AI status with real testing
-        if ANTHROPIC_API_KEY:
+        api_key = get_api_key()
+        if api_key:
             if st.session_state.api_test_result is None:
                 with st.spinner("Testing Michigan State AI..."):
                     working, message = test_api_key()
@@ -727,3 +730,297 @@ def display_course_dashboard():
         height=400
     )
     st.plotly_chart(fig, use_container_width=True)
+
+def display_slides():
+    """Display interactive slides with navigation"""
+    st.markdown("# 📚 Course Slides")
+    
+    # Slide navigation
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col1:
+        if st.button("⬅️ Previous", disabled=(st.session_state.current_slide == 0)):
+            st.session_state.current_slide = max(0, st.session_state.current_slide - 1)
+            st.rerun()
+    
+    with col2:
+        st.markdown(f"<center>Slide {st.session_state.current_slide + 1} of {len(SLIDES)}</center>", 
+                   unsafe_allow_html=True)
+    
+    with col3:
+        if st.button("Next ➡️", disabled=(st.session_state.current_slide >= len(SLIDES) - 1)):
+            st.session_state.current_slide = min(len(SLIDES) - 1, st.session_state.current_slide + 1)
+            st.rerun()
+    
+    # Display current slide
+    if 0 <= st.session_state.current_slide < len(SLIDES):
+        create_interactive_slide(SLIDES[st.session_state.current_slide])
+    
+    # Slide overview
+    st.markdown("---")
+    st.markdown("### Slide Overview")
+    for i, slide in enumerate(SLIDES):
+        emoji = "📍" if i == st.session_state.current_slide else "📄"
+        if st.button(f"{emoji} {slide['title']}", key=f"slide_{i}"):
+            st.session_state.current_slide = i
+            st.rerun()
+
+def display_ai_experts():
+    """Display Michigan State AI experts interface"""
+    st.markdown("# 🤖 Michigan State AI Experts")
+    st.markdown("Get help from specialized AI historians who understand Michigan's unique story.")
+    
+    # Expert selection
+    expert_tabs = st.tabs([
+        "🏛️ Historical Expert", 
+        "🗺️ Geography Expert", 
+        "🏙️ Detroit Historian"
+    ])
+    
+    expert_keys = ["Historical_Expert", "Geography_Expert", "Detroit_Historian"]
+    
+    for i, (tab, expert_key) in enumerate(zip(expert_tabs, expert_keys)):
+        with tab:
+            expert = MICHIGAN_AI_EXPERTS[expert_key]
+            
+            # Expert profile
+            st.markdown(f"### {expert['name']}")
+            st.markdown(f"**{expert['title']}**")
+            st.markdown(expert['background'])
+            
+            with st.expander("Areas of Expertise"):
+                for area in expert['key_areas']:
+                    st.markdown(f"• {area}")
+            
+            # Michigan resident verification
+            if not st.session_state.resident_verified:
+                st.markdown("---")
+                st.markdown("#### Are you a Michigan resident?")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Yes, I live in Michigan", key=f"resident_yes_{expert_key}"):
+                        st.session_state.resident_verified = True
+                        st.success("Great! I'll provide Michigan-specific guidance.")
+                        st.rerun()
+                with col2:
+                    if st.button("No, just studying Michigan", key=f"resident_no_{expert_key}"):
+                        st.session_state.resident_verified = False
+                        st.info("I'll focus on educational content about Michigan history.")
+            
+            # Chat interface
+            st.markdown("---")
+            st.markdown("#### Ask a Question")
+            
+            question = st.text_area(
+                "What would you like to know about Michigan history?",
+                key=f"question_{expert_key}",
+                placeholder="Example: How did the Great Lakes influence early settlement patterns?",
+                height=100
+            )
+            
+            if st.button(f"Ask {expert['name']}", key=f"ask_{expert_key}"):
+                if question.strip():
+                    with st.spinner(f"Consulting with {expert['name']}..."):
+                        response = get_ai_specialist_response(expert_key, question)
+                        
+                        # Store conversation
+                        conversation = {
+                            'expert': expert['name'],
+                            'question': question,
+                            'response': response,
+                            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        st.session_state.ai_conversations.append(conversation)
+                        
+                        # Display response
+                        st.markdown("#### Response:")
+                        st.markdown(response)
+                else:
+                    st.warning("Please enter a question.")
+            
+            # Show conversation history for this expert
+            expert_conversations = [
+                conv for conv in st.session_state.ai_conversations 
+                if conv['expert'] == expert['name']
+            ]
+            
+            if expert_conversations:
+                st.markdown("---")
+                st.markdown("#### Previous Conversations")
+                for conv in expert_conversations[-3:]:  # Show last 3 conversations
+                    with st.expander(f"Q: {conv['question'][:50]}... ({conv['timestamp']})"):
+                        st.markdown(f"**Question:** {conv['question']}")
+                        st.markdown(f"**Response:** {conv['response']}")
+
+def display_quizzes():
+    """Display interactive quizzes"""
+    st.markdown("# 📝 Knowledge Check Quizzes")
+    
+    # Quiz selection
+    quiz_options = list(QUIZ_DATA.keys())
+    selected_quiz = st.selectbox(
+        "Choose a quiz:",
+        quiz_options,
+        format_func=lambda x: QUIZ_DATA[x]["title"]
+    )
+    
+    quiz = QUIZ_DATA[selected_quiz]
+    st.markdown(f"## {quiz['title']}")
+    
+    # Initialize quiz attempt if not exists
+    if selected_quiz not in st.session_state.quiz_attempts:
+        st.session_state.quiz_attempts[selected_quiz] = {
+            'answers': {},
+            'submitted': False,
+            'score': 0
+        }
+    
+    quiz_state = st.session_state.quiz_attempts[selected_quiz]
+    
+    if not quiz_state['submitted']:
+        # Display questions
+        for i, question_data in enumerate(quiz['questions']):
+            st.markdown(f"### Question {i+1}")
+            st.markdown(question_data['question'])
+            
+            # Multiple choice options
+            answer = st.radio(
+                "Select your answer:",
+                question_data['options'],
+                key=f"{selected_quiz}_q{i}",
+                index=None
+            )
+            
+            if answer:
+                quiz_state['answers'][i] = question_data['options'].index(answer)
+        
+        # Submit button
+        if st.button("Submit Quiz"):
+            if len(quiz_state['answers']) == len(quiz['questions']):
+                quiz_state['submitted'] = True
+                
+                # Calculate score
+                correct_answers = 0
+                for i, question_data in enumerate(quiz['questions']):
+                    if quiz_state['answers'].get(i) == question_data['correct']:
+                        correct_answers += 1
+                
+                quiz_state['score'] = (correct_answers / len(quiz['questions'])) * 100
+                st.rerun()
+            else:
+                st.warning("Please answer all questions before submitting.")
+    
+    else:
+        # Show results
+        st.markdown("## Quiz Results")
+        score = quiz_state['score']
+        
+        if score >= 90:
+            st.success(f"Excellent! You scored {score:.1f}%")
+        elif score >= 70:
+            st.info(f"Good work! You scored {score:.1f}%")
+        else:
+            st.warning(f"You scored {score:.1f}%. Review the material and try again.")
+        
+        # Show detailed results
+        st.markdown("### Detailed Results")
+        for i, question_data in enumerate(quiz['questions']):
+            user_answer = quiz_state['answers'].get(i, -1)
+            correct_answer = question_data['correct']
+            
+            st.markdown(f"**Question {i+1}:** {question_data['question']}")
+            
+            if user_answer == correct_answer:
+                st.success(f"✅ Correct: {question_data['options'][correct_answer]}")
+            else:
+                st.error(f"❌ Your answer: {question_data['options'][user_answer] if user_answer >= 0 else 'No answer'}")
+                st.info(f"Correct answer: {question_data['options'][correct_answer]}")
+            
+            st.markdown(f"*Explanation:* {question_data['explanation']}")
+            st.markdown("---")
+        
+        # Reset button
+        if st.button("Take Quiz Again"):
+            st.session_state.quiz_attempts[selected_quiz] = {
+                'answers': {},
+                'submitted': False,
+                'score': 0
+            }
+            st.rerun()
+
+def display_resources():
+    """Display course resources"""
+    st.markdown("# 📚 Course Resources")
+    
+    # Video resources
+    st.markdown("## 🎥 Educational Videos")
+    for video in MICHIGAN_RESOURCES['videos']:
+        with st.expander(f"{video['title']} ({video['duration']})"):
+            st.markdown(f"**Topic:** {video['topic']}")
+            st.markdown(video['description'])
+            st.markdown(f"[Watch Video]({video['url']})")
+    
+    # Article resources
+    st.markdown("## 📖 Articles & Research")
+    for article in MICHIGAN_RESOURCES['articles']:
+        with st.expander(article['title']):
+            st.markdown(article['description'])
+            st.markdown(f"[Read Article]({article['url']})")
+    
+    # Michigan resident resources
+    if st.session_state.resident_verified:
+        st.markdown("## 🏠 Michigan Resident Resources")
+        st.info("Since you're a Michigan resident, here are some additional helpful resources:")
+        
+        for resource in MICHIGAN_RESOURCES['michigan_resident_resources']:
+            with st.expander(resource['title']):
+                st.markdown(resource['description'])
+                st.markdown(f"[Visit Site]({resource['url']})")
+
+# Main application
+def main():
+    """Main application logic"""
+    
+    # Sidebar navigation
+    st.sidebar.markdown("# Navigation")
+    
+    pages = {
+        "🏠 Dashboard": "dashboard",
+        "📚 Course Slides": "slides", 
+        "🤖 Michigan State AI": "ai_experts",
+        "📝 Quizzes": "quizzes",
+        "📚 Resources": "resources"
+    }
+    
+    selected_page = st.sidebar.radio("Go to:", list(pages.keys()))
+    st.session_state.current_page = pages[selected_page]
+    
+    # API Key status in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Michigan State AI Status")
+    
+    api_key = get_api_key()
+    if api_key:
+        if st.session_state.api_test_result is None:
+            st.sidebar.info("Testing connection...")
+        elif st.session_state.api_test_result[0]:
+            st.sidebar.success("✅ AI Ready")
+        else:
+            st.sidebar.error(f"❌ {st.session_state.api_test_result[1]}")
+    else:
+        st.sidebar.warning("⚠️ API Key needed")
+    
+    # Display selected page
+    if st.session_state.current_page == "dashboard":
+        display_course_dashboard()
+    elif st.session_state.current_page == "slides":
+        display_slides()
+    elif st.session_state.current_page == "ai_experts":
+        display_ai_experts()
+    elif st.session_state.current_page == "quizzes":
+        display_quizzes()
+    elif st.session_state.current_page == "resources":
+        display_resources()
+
+if __name__ == "__main__":
+    main()
